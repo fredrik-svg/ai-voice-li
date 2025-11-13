@@ -1,0 +1,21 @@
+device:
+  id: voice-zero-2
+  tenant: GENIO
+  user: fredrik
+
+webhook:
+  url: "https://your-n8n-host/webhook/voice-agent"
+  timeout: 90
+
+audio:
+  device: "plughw:1,0"
+  rate: 16000
+  channels: 1
+  format: "S16_LE"
+  duration_max: 8
+  tmp_record_path: "/tmp/voice_in.wav"
+  tmp_reply_path: "/tmp/voice_out.wav"
+
+gpio:
+  button_pin: 17
+  pull_up: true
