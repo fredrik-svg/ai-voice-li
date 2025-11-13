@@ -23,18 +23,26 @@ Justera `config.yaml` (webhook-URL, audio.device).
 
 ### Ljudformat
 
-Systemet kan ta emot ljudfiler i olika format från n8n:
-- `wav` (standard, ingen konvertering krävs)
+Systemet kan ta emot och spela upp ljudfiler i olika format från n8n:
+- `wav` (standard)
 - `mp3`
 - `flac`
 - `ogg`
 - `m4a`
 
-Ange önskat format i `config.yaml` under `audio.reply_format`. Om ett annat format än WAV används, kommer filen automatiskt att konverteras till WAV före uppspelning. Detta kräver att `ffmpeg` eller `sox` är installerat:
+Ange önskat format i `config.yaml` under `audio.reply_format`. 
+
+**Ingen konvertering behövs!** Systemet använder automatiskt `ffplay` (del av ffmpeg) eller `play` (del av sox) som kan spela upp alla format direkt. Som fallback används `aplay` som endast stödjer WAV, och då konverteras filer automatiskt vid behov.
+
+För bästa kompatibilitet, installera `ffmpeg` (rekommenderas):
 
 ```bash
 sudo apt-get install -y ffmpeg
-# eller
+```
+
+Alternativt kan `sox` användas:
+
+```bash
 sudo apt-get install -y sox libsox-fmt-all
 ```
 

@@ -101,21 +101,65 @@ class SimpleVoiceAgent:
             f.write(resp.content)
         print(f"[http] Sparade svarsljud ({reply_format}) till {received_path}")
         
-        # Om formatet inte är wav, konvertera till wav för uppspelning
-        if reply_format != "wav":
-            wav_path = f"{base_path}.wav"
-            if not self.convert_to_wav(received_path, wav_path):
-                print("[audio] Konvertering misslyckades, försöker spela upp originalfilen")
-                return received_path
-            print(f"[audio] Konverterade till wav: {wav_path}")
-            return wav_path
-        
+        # Returnera ljudfilen direkt - ingen konvertering behövs om vi använder ffplay eller play
         return received_path
+
+    def play_audio(self, audio_path: str):
+        """
+        Spelar upp en ljudfil i valfritt format (wav, mp3, flac, ogg, etc.)
+        Försöker med ffplay först (stöder alla format), sedan play (sox), slutligen aplay (endast wav).
+        """
+        audio = self.cfg["audio"]
+        dev = audio["device"]
+        
+        print(f"[audio] Spelar upp svar från {audio_path}...")
+        
+        # Försök 1: ffplay (del av ffmpeg, stödjer alla format)
+        # Använd -nodisp för att inte visa video-fönster, -autoexit för att stänga när klar
+        # -loglevel quiet för att undvika onödig output
+        cmd_ffplay = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", audio_path]
+        try:
+            subprocess.run(cmd_ffplay, check=True, capture_output=True)
+            return
+        except FileNotFoundError:
+            print("[audio] ffplay saknas, försöker play (sox)...")
+        except subprocess.CalledProcessError as e:
+            print(f"[audio] ffplay misslyckades: {e}")
+        
+        # Försök 2: play (del av sox, stödjer många format)
+        cmd_play = ["play", "-q", audio_path]
+        try:
+            subprocess.run(cmd_play, check=True, capture_output=True)
+            return
+        except FileNotFoundError:
+            print("[audio] play saknas, försöker aplay...")
+        except subprocess.CalledProcessError as e:
+            print(f"[audio] play misslyckades: {e}")
+        
+        # Försök 3: aplay (endast för WAV-filer)
+        # Om filen inte är wav, försök konvertera först
+        if not audio_path.endswith('.wav'):
+            print(f"[audio] aplay kräver WAV-format, konverterar {audio_path}...")
+            wav_path = audio_path.rsplit('.', 1)[0] + '_converted.wav'
+            if self.convert_to_wav(audio_path, wav_path):
+                audio_path = wav_path
+            else:
+                print("[audio] Konvertering misslyckades, kan inte spela upp med aplay")
+                return
+        
+        cmd_aplay = ["aplay", "-q", "-D", dev, audio_path]
+        try:
+            subprocess.run(cmd_aplay, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"[audio] aplay misslyckades: {e}")
+        except FileNotFoundError:
+            print("[audio] Ingen ljudspelare hittades (ffplay, play eller aplay)")
 
     def convert_to_wav(self, input_path: str, output_path: str):
         """
         Konverterar ljudfil till WAV-format med ffmpeg eller sox.
         Returnerar True om konvertering lyckades, annars False.
+        Används endast som fallback när aplay måste användas.
         """
         # Försök med ffmpeg först
         cmd_ffmpeg = [
@@ -128,7 +172,7 @@ class SimpleVoiceAgent:
         
         print(f"[audio] Konverterar {input_path} till {output_path} med ffmpeg...")
         try:
-            result = subprocess.run(cmd_ffmpeg, check=True, capture_output=True, text=True)
+            subprocess.run(cmd_ffmpeg, check=True, capture_output=True, text=True)
             return True
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"[audio] ffmpeg misslyckades eller saknas: {e}")
@@ -137,22 +181,12 @@ class SimpleVoiceAgent:
         cmd_sox = ["sox", input_path, output_path]
         print(f"[audio] Försöker konvertera med sox...")
         try:
-            result = subprocess.run(cmd_sox, check=True, capture_output=True, text=True)
+            subprocess.run(cmd_sox, check=True, capture_output=True, text=True)
             return True
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"[audio] sox misslyckades eller saknas: {e}")
         
         return False
-
-    def play_wav(self, wav_path: str):
-        audio = self.cfg["audio"]
-        dev = audio["device"]
-        cmd = ["aplay", "-q", "-D", dev, wav_path]
-        print("[audio] Spelar upp svar...")
-        try:
-            subprocess.run(cmd, check=True)
-        except subprocess.CalledProcessError as e:
-            print("[audio] aplay misslyckades:", e)
 
     def handle_button(self):
         if not self._lock.acquire(blocking=False):
@@ -164,9 +198,9 @@ class SimpleVoiceAgent:
                 wav_in = self.record_once()
                 if not wav_in:
                     return
-                wav_out = self.send_to_webhook(wav_in)
-                if wav_out:
-                    self.play_wav(wav_out)
+                audio_out = self.send_to_webhook(wav_in)
+                if audio_out:
+                    self.play_audio(audio_out)
             finally:
                 self._lock.release()
 
