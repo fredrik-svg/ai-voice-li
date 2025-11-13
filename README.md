@@ -5,7 +5,7 @@ Enkel röstagent för Raspberry Pi Zero 2 WH + 2-Mic HAT.
 - Tryck på knappen på HAT:en (GPIO17)
 - Pi spelar in en WAV-fil (max några sekunder)
 - Skickar WAV till en n8n-webhook
-- Tar emot en WAV som svar och spelar upp den
+- Tar emot ljudfil i valfritt format (WAV, MP3, FLAC, etc.) som svar och spelar upp den
 
 ## Snabbstart
 
@@ -20,6 +20,23 @@ chmod +x scripts/install_deps.sh
 ```
 
 Justera `config.yaml` (webhook-URL, audio.device).
+
+### Ljudformat
+
+Systemet kan ta emot ljudfiler i olika format från n8n:
+- `wav` (standard, ingen konvertering krävs)
+- `mp3`
+- `flac`
+- `ogg`
+- `m4a`
+
+Ange önskat format i `config.yaml` under `audio.reply_format`. Om ett annat format än WAV används, kommer filen automatiskt att konverteras till WAV före uppspelning. Detta kräver att `ffmpeg` eller `sox` är installerat:
+
+```bash
+sudo apt-get install -y ffmpeg
+# eller
+sudo apt-get install -y sox libsox-fmt-all
+```
 
 Kör:
 
