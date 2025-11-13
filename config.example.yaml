@@ -15,6 +15,9 @@ audio:
   duration_max: 8
   tmp_record_path: "/tmp/voice_in.wav"
   tmp_reply_path: "/tmp/voice_out.wav"
+  # Format för ljudfilen som förväntas från n8n (wav, mp3, flac, ogg, m4a)
+  # Om annat än wav anges, konverteras filen automatiskt till wav för uppspelning
+  reply_format: "wav"
 
 gpio:
   button_pin: 17

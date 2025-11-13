@@ -87,11 +87,62 @@ class SimpleVoiceAgent:
             print("[http] Content-Type är inte audio/* – fick troligen något annat:", ctype)
             return None
 
-        out_path = self.cfg["audio"]["tmp_reply_path"]
-        with open(out_path, "wb") as f:
+        # Hämta förväntat format från config (standard: wav)
+        reply_format = self.cfg["audio"].get("reply_format", "wav").lower()
+        
+        # Spara mottagen fil med rätt filformat
+        base_path = self.cfg["audio"]["tmp_reply_path"]
+        # Ta bort befintlig filändelse om den finns
+        if base_path.endswith('.wav'):
+            base_path = base_path[:-4]
+        
+        received_path = f"{base_path}.{reply_format}"
+        with open(received_path, "wb") as f:
             f.write(resp.content)
-        print(f"[http] Sparade svarsljud till {out_path}")
-        return out_path
+        print(f"[http] Sparade svarsljud ({reply_format}) till {received_path}")
+        
+        # Om formatet inte är wav, konvertera till wav för uppspelning
+        if reply_format != "wav":
+            wav_path = f"{base_path}.wav"
+            if not self.convert_to_wav(received_path, wav_path):
+                print("[audio] Konvertering misslyckades, försöker spela upp originalfilen")
+                return received_path
+            print(f"[audio] Konverterade till wav: {wav_path}")
+            return wav_path
+        
+        return received_path
+
+    def convert_to_wav(self, input_path: str, output_path: str):
+        """
+        Konverterar ljudfil till WAV-format med ffmpeg eller sox.
+        Returnerar True om konvertering lyckades, annars False.
+        """
+        # Försök med ffmpeg först
+        cmd_ffmpeg = [
+            "ffmpeg", "-y", "-i", input_path,
+            "-acodec", "pcm_s16le",
+            "-ar", "16000",
+            "-ac", "1",
+            output_path
+        ]
+        
+        print(f"[audio] Konverterar {input_path} till {output_path} med ffmpeg...")
+        try:
+            result = subprocess.run(cmd_ffmpeg, check=True, capture_output=True, text=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"[audio] ffmpeg misslyckades eller saknas: {e}")
+        
+        # Om ffmpeg misslyckades, försök med sox
+        cmd_sox = ["sox", input_path, output_path]
+        print(f"[audio] Försöker konvertera med sox...")
+        try:
+            result = subprocess.run(cmd_sox, check=True, capture_output=True, text=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"[audio] sox misslyckades eller saknas: {e}")
+        
+        return False
 
     def play_wav(self, wav_path: str):
         audio = self.cfg["audio"]
