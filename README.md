@@ -34,7 +34,15 @@ Ange önskat format i `config.yaml` under `audio.reply_format`.
 
 **Ingen konvertering behövs!** Systemet använder automatiskt `ffplay` (del av ffmpeg) eller `play` (del av sox) som kan spela upp alla format direkt. Som fallback används `aplay` som endast stödjer WAV, och då konverteras filer automatiskt vid behov.
 
-För bästa kompatibilitet, installera `ffmpeg` (rekommenderas):
+#### Hur det fungerar
+
+Systemet försöker spela upp ljud med följande prioritet:
+
+1. **ffplay** (ffmpeg) - Stöder alla format (WAV, MP3, FLAC, OGG, M4A, etc.) ✅ Rekommenderas
+2. **play** (sox) - Stöder de flesta format
+3. **aplay** (alsa) - Endast WAV, konverterar automatiskt vid behov
+
+För bästa kompatibilitet och prestanda, installera `ffmpeg` (rekommenderas):
 
 ```bash
 sudo apt-get install -y ffmpeg
