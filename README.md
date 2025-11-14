@@ -19,6 +19,8 @@ chmod +x scripts/install_deps.sh
 ./scripts/install_deps.sh
 ```
 
+Installationsskriptet skapar en Python virtual environment (venv) för att undvika problem med externally-managed-environment på moderna system.
+
 Justera `config.yaml` (webhook-URL, audio.device).
 
 ### Ljudformat
