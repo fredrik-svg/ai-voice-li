@@ -22,8 +22,8 @@ class Button:
             return
 
         GPIO.setmode(GPIO.BCM)
-        pud = GPIO.PUD_UP if self.pull_up else GPIO.PUD_DOWN
-        GPIO.setup(self.pin, GPIO.IN, pull_up_down=pud)
+        # Don't configure pull-up/down in software - the hardware already has it
+        GPIO.setup(self.pin, GPIO.IN)
         edge = GPIO.FALLING if self.pull_up else GPIO.RISING
         GPIO.add_event_detect(self.pin, edge, callback=self._edge, bouncetime=150)
         print(f"[gpio] Knapp på GPIO{self.pin} – tryck för att spela in.")
