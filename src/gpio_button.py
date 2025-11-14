@@ -34,6 +34,16 @@ class Button:
         if self._pressed_cb:
             self._pressed_cb()
 
+    def read_state(self):
+        """
+        Read the current state of the button.
+        Returns True if button is not pressed (HIGH), False if pressed (LOW).
+        For simulated mode, always returns True (not pressed).
+        """
+        if GPIO is None:
+            return True
+        return GPIO.input(self.pin)
+
     def cleanup(self):
         """Cleanup GPIO resources when shutting down."""
         if GPIO is not None:
