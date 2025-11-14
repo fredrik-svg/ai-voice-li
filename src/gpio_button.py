@@ -26,6 +26,11 @@ class Button:
         # The KS0314 ReSpeaker 2-Mic HAT has a hardware pull-up on GPIO17
         # so we detect FALLING edge when button is pressed (active low)
         GPIO.setup(self.pin, GPIO.IN)
+        # Remove any existing event detection to avoid "Failed to add edge detection" error
+        try:
+            GPIO.remove_event_detect(self.pin)
+        except Exception:
+            pass  # Ignore if no event detection was previously set
         edge = GPIO.FALLING if self.pull_up else GPIO.RISING
         GPIO.add_event_detect(self.pin, edge, callback=self._edge, bouncetime=150)
         print(f"[gpio] Knapp på GPIO{self.pin} – tryck för att spela in.")
