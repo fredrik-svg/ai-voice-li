@@ -22,6 +22,11 @@ class Button:
             return
 
         GPIO.setmode(GPIO.BCM)
+        # Cleanup the pin first to remove any existing event detection
+        try:
+            GPIO.cleanup(self.pin)
+        except Exception:
+            pass  # Ignore if pin was not previously configured
         pud = GPIO.PUD_UP if self.pull_up else GPIO.PUD_DOWN
         GPIO.setup(self.pin, GPIO.IN, pull_up_down=pud)
         edge = GPIO.FALLING if self.pull_up else GPIO.RISING
@@ -31,6 +36,15 @@ class Button:
     def _edge(self, channel):
         if self._pressed_cb:
             self._pressed_cb()
+
+    def cleanup(self):
+        """Cleanup GPIO resources when shutting down."""
+        if GPIO is not None:
+            try:
+                GPIO.cleanup(self.pin)
+                print(f"[gpio] Städade GPIO{self.pin}")
+            except Exception as e:
+                print(f"[gpio] Kunde inte städa GPIO{self.pin}: {e}")
 
     def _simulate(self):
         while True:
