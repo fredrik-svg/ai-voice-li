@@ -49,6 +49,11 @@ class SimpleVoiceAgent:
         try:
             subprocess.run(cmd, check=True)
         except subprocess.CalledProcessError as e:
+            # arecord returns a non-zero exit code when the process is interrupted
+            # (e.g. when the agent is shutting down due to Ctrl+C). In that case we
+            # simply abort silently instead of reporting a failure to the user.
+            if not self.running:
+                return None
             print("[audio] arecord misslyckades:", e)
             return None
 
