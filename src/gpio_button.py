@@ -23,6 +23,8 @@ class Button:
 
         GPIO.setmode(GPIO.BCM)
         # Don't configure pull-up/down in software - the hardware already has it
+        # The KS0314 ReSpeaker 2-Mic HAT has a hardware pull-up on GPIO17
+        # so we detect FALLING edge when button is pressed (active low)
         GPIO.setup(self.pin, GPIO.IN)
         edge = GPIO.FALLING if self.pull_up else GPIO.RISING
         GPIO.add_event_detect(self.pin, edge, callback=self._edge, bouncetime=150)
