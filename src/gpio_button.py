@@ -1,4 +1,5 @@
 import threading
+import time
 from typing import Optional
 
 try:
@@ -12,11 +13,14 @@ class Button:
         self.pin = pin
         self.pull_up = pull_up
         self._pressed_cb = None
+        self._stop_event = threading.Event()
+        self._poll_thread: Optional[threading.Thread] = None
 
     def on_pressed(self, cb):
         self._pressed_cb = cb
 
     def start(self):
+        self._stop_event.clear()
         if GPIO is None:
             self._start_simulation(
                 "[gpio] RPi.GPIO saknas – simulerar knapp (tryck Enter i terminalen)"
@@ -35,8 +39,17 @@ class Button:
             except Exception:
                 pass  # Ignore if no event detection was previously set
             edge = GPIO.FALLING if self.pull_up else GPIO.RISING
-            GPIO.add_event_detect(self.pin, edge, callback=self._edge, bouncetime=150)
-            print(f"[gpio] Knapp på GPIO{self.pin} – tryck för att spela in.")
+            try:
+                GPIO.add_event_detect(
+                    self.pin, edge, callback=self._edge, bouncetime=150
+                )
+                print(f"[gpio] Knapp på GPIO{self.pin} – tryck för att spela in.")
+            except Exception as edge_error:
+                print(
+                    "[gpio] Kunde inte aktivera edge detection: "
+                    f"{edge_error}. Växlar till polling-läge."
+                )
+                self._start_polling()
         except Exception as e:
             print(
                 f"[gpio] Kunde inte initiera GPIO{self.pin}: {e}. "
@@ -63,7 +76,15 @@ class Button:
 
     def cleanup(self):
         """Cleanup GPIO resources when shutting down."""
+        self._stop_event.set()
+        if self._poll_thread and self._poll_thread.is_alive():
+            self._poll_thread.join(timeout=0.2)
+        self._poll_thread = None
         if GPIO is not None:
+            try:
+                GPIO.remove_event_detect(self.pin)
+            except Exception:
+                pass
             try:
                 GPIO.cleanup(self.pin)
                 print(f"[gpio] Städade GPIO{self.pin}")
@@ -80,3 +101,33 @@ class Button:
         if message:
             print(message)
         threading.Thread(target=self._simulate, daemon=True).start()
+
+    def _start_polling(self):
+        if GPIO is None:
+            return
+        if self._poll_thread and self._poll_thread.is_alive():
+            return
+        self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self._poll_thread.start()
+        print(
+            f"[gpio] Knapp på GPIO{self.pin} – använder polling. Tryck för att spela in."
+        )
+
+    def _poll_loop(self):
+        if GPIO is None:
+            return
+        last_state = GPIO.input(self.pin)
+        while not self._stop_event.is_set():
+            state = GPIO.input(self.pin)
+            if self._is_pressed(state) and not self._is_pressed(last_state):
+                if self._pressed_cb:
+                    self._pressed_cb()
+            last_state = state
+            time.sleep(0.05)
+
+    def _is_pressed(self, state: int) -> bool:
+        if GPIO is None:
+            return False
+        if self.pull_up:
+            return state == GPIO.LOW
+        return state == GPIO.HIGH
