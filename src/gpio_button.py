@@ -22,11 +22,6 @@ class Button:
             return
 
         GPIO.setmode(GPIO.BCM)
-        # Cleanup the pin first to remove any existing event detection
-        try:
-            GPIO.cleanup(self.pin)
-        except Exception:
-            pass  # Ignore if pin was not previously configured
         pud = GPIO.PUD_UP if self.pull_up else GPIO.PUD_DOWN
         GPIO.setup(self.pin, GPIO.IN, pull_up_down=pud)
         edge = GPIO.FALLING if self.pull_up else GPIO.RISING
