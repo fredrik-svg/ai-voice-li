@@ -2,9 +2,16 @@
 set -euo pipefail
 
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip python3-dev git       alsa-utils sox libasound2-dev ffmpeg
+sudo apt-get install -y python3 python3-pip python3-dev python3-venv git       alsa-utils sox libasound2-dev ffmpeg
 
-pip3 install -r requirements.txt
+# Create virtual environment if it doesn't exist
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+fi
+
+# Activate virtual environment and install dependencies
+source venv/bin/activate
+pip install -r requirements.txt
 
 echo
 echo "Nu behöver du:"
