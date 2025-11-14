@@ -22,6 +22,69 @@ class SimpleVoiceAgent:
         self.running = True
         self._lock = threading.Lock()
         self.button = None
+        self.status_sounds_enabled = cfg.get("status_sounds", {}).get("enabled", True)
+
+    def play_status_beep(self, beep_type: str):
+        """
+        Spelar statusljud för att indikera vad som händer.
+        beep_type kan vara: 'start', 'sending', 'processing', 'success', 'error'
+        """
+        if not self.status_sounds_enabled:
+            return
+        
+        audio = self.cfg["audio"]
+        dev = audio["device"]
+        
+        # Olika frekvenser och durationer för olika statustyper
+        beep_configs = {
+            'start': {'freq': 800, 'duration': 0.15},      # Kort hög ton för start
+            'sending': {'freq': 1000, 'duration': 0.1},    # Kort ännu högre ton för sändning
+            'processing': {'freq': 600, 'duration': 0.2},  # Medellång lägre ton för bearbetning
+            'success': {'freq': 1200, 'duration': 0.1},    # Dubbel hög ton för framgång
+            'error': {'freq': 400, 'duration': 0.3}        # Lång låg ton för fel
+        }
+        
+        if beep_type not in beep_configs:
+            return
+            
+        config = beep_configs[beep_type]
+        
+        # Använd speaker-test för att generera ett enkelt pip
+        # -t sine = sinusvåg, -f = frekvens, -l 1 = spela en gång, -r = samplingsfrekvens
+        cmd = [
+            "speaker-test",
+            "-t", "sine",
+            "-f", str(config['freq']),
+            "-l", "1",
+            "-r", "48000",
+            "-D", dev
+        ]
+        
+        try:
+            # Kör speaker-test och avbryt efter specificerad duration
+            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(config['duration'])
+            proc.terminate()
+            proc.wait(timeout=1)
+        except Exception as e:
+            # Om speaker-test misslyckas, försök med beep-kommandot
+            try:
+                subprocess.run(["beep", "-f", str(config['freq']), "-l", str(int(config['duration'] * 1000))], 
+                             timeout=1, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                # Ignorera fel - statusljud är inte kritiskt
+                pass
+        
+        # För 'success' lägg till ett andra pip
+        if beep_type == 'success':
+            time.sleep(0.05)
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                time.sleep(0.1)
+                proc.terminate()
+                proc.wait(timeout=1)
+            except Exception:
+                pass
 
     def record_once(self):
         audio = self.cfg["audio"]
@@ -33,6 +96,9 @@ class SimpleVoiceAgent:
         out_path = audio["tmp_record_path"]
 
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+        # Spela statusljud för att indikera att inspelning startar
+        self.play_status_beep('start')
 
         cmd = [
             "arecord",
@@ -81,6 +147,9 @@ class SimpleVoiceAgent:
         timeout = int(self.cfg["webhook"].get("timeout", 90))
         dev_info = self.cfg["device"]
 
+        # Spela statusljud för att indikera att filen skickas
+        self.play_status_beep('sending')
+
         print(f"[http] Skickar {wav_path} till webhook {url}")
         with open(wav_path, "rb") as f:
             files = {"audio": ("audio.wav", f, "audio/wav")}
@@ -89,20 +158,27 @@ class SimpleVoiceAgent:
                 "tenant": dev_info["tenant"],
                 "user": dev_info["user"],
             }
+            
+            # Spela statusljud för att indikera att vi väntar på svar
+            self.play_status_beep('processing')
+            
             try:
                 resp = requests.post(url, data=data, files=files, timeout=timeout)
             except Exception as e:
                 print("[http] Fel vid POST:", e)
+                self.play_status_beep('error')
                 return None
 
         print("[http] Svar status:", resp.status_code)
         if resp.status_code != 200:
             print("[http] Oväntad statuskod, ingen uppspelning.")
+            self.play_status_beep('error')
             return None
 
         ctype = resp.headers.get("Content-Type", "")
         if not ctype.startswith("audio/"):
             print("[http] Content-Type är inte audio/* – fick troligen något annat:", ctype)
+            self.play_status_beep('error')
             return None
 
         # Hämta förväntat format från config (standard: wav)
@@ -118,6 +194,9 @@ class SimpleVoiceAgent:
         with open(received_path, "wb") as f:
             f.write(resp.content)
         print(f"[http] Sparade svarsljud ({reply_format}) till {received_path}")
+        
+        # Spela framgångsljud när vi fått svaret
+        self.play_status_beep('success')
         
         # Om formatet inte är wav, konvertera till wav för uppspelning
         if reply_format != "wav":
@@ -194,10 +273,13 @@ class SimpleVoiceAgent:
             try:
                 wav_in = self.record_once()
                 if not wav_in:
+                    # Spela felljud om inspelning misslyckades
+                    self.play_status_beep('error')
                     return
                 wav_out = self.send_to_webhook(wav_in)
                 if wav_out:
                     self.play_wav(wav_out)
+                # Om send_to_webhook returnerar None spelas felljud redan där
             finally:
                 self._lock.release()
 

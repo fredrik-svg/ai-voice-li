@@ -22,3 +22,7 @@ audio:
 gpio:
   button_pin: 17
   pull_up: true
+
+status_sounds:
+  # Aktivera eller avaktivera statusljud (pip för att indikera vad som händer)
+  enabled: true
