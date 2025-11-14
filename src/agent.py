@@ -21,6 +21,7 @@ class SimpleVoiceAgent:
         self.cfg = cfg
         self.running = True
         self._lock = threading.Lock()
+        self.button = None
 
     def record_once(self):
         audio = self.cfg["audio"]
@@ -174,15 +175,17 @@ class SimpleVoiceAgent:
 
     def start(self):
         gpio_cfg = self.cfg["gpio"]
-        btn = Button(pin=gpio_cfg["button_pin"], pull_up=gpio_cfg.get("pull_up", True))
-        btn.on_pressed(self.handle_button)
-        btn.start()
+        self.button = Button(pin=gpio_cfg["button_pin"], pull_up=gpio_cfg.get("pull_up", True))
+        self.button.on_pressed(self.handle_button)
+        self.button.start()
         print("[agent] Klar. Tryck på knappen för att spela in. Ctrl+C för att avsluta.")
         while self.running:
             time.sleep(0.5)
 
     def stop(self):
         self.running = False
+        if self.button:
+            self.button.cleanup()
 
 
 def main():
