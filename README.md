@@ -47,6 +47,23 @@ chmod +x scripts/run.sh
 ./scripts/run.sh
 ```
 
+### Statusljud
+
+Systemet använder ljudsignaler för att ge feedback om vad som händer:
+
+- **Kort hög ton (800 Hz)** - Inspelning startar
+- **Kort högre ton (1000 Hz)** - Skickar fil till webhook
+- **Medellång lägre ton (600 Hz)** - Väntar på svar från webhook
+- **Dubbel hög ton (1200 Hz)** - Framgång! Svar mottaget
+- **Lång låg ton (400 Hz)** - Fel uppstod (inspelning, nätverksfel, etc.)
+
+Statusljud kan avaktiveras i `config.yaml`:
+
+```yaml
+status_sounds:
+  enabled: false
+```
+
 ## systemd
 
 ```bash
