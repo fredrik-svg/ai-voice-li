@@ -47,7 +47,13 @@ class SimpleVoiceAgent:
 
         print(f"[audio] Spelar in (max {dur}s) på {dev} ...")
         try:
-            subprocess.run(cmd, check=True)
+            # Add timeout to prevent hanging if arecord doesn't respond
+            # Set timeout slightly longer than recording duration to allow for completion
+            timeout = dur + 5
+            subprocess.run(cmd, check=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            print(f"[audio] arecord timeout efter {timeout}s - avbryter inspelning")
+            return None
         except subprocess.CalledProcessError as e:
             # arecord returns a non-zero exit code when the process is interrupted
             # (e.g. when the agent is shutting down due to Ctrl+C). In that case we
@@ -55,6 +61,12 @@ class SimpleVoiceAgent:
             if not self.running:
                 return None
             print("[audio] arecord misslyckades:", e)
+            return None
+        except FileNotFoundError:
+            print("[audio] arecord hittades inte - kontrollera att ALSA-verktyg är installerade")
+            return None
+        except Exception as e:
+            print(f"[audio] Oväntat fel vid inspelning: {e}")
             return None
 
         if not os.path.exists(out_path):
@@ -134,8 +146,11 @@ class SimpleVoiceAgent:
         
         print(f"[audio] Konverterar {input_path} till {output_path} med ffmpeg...")
         try:
-            result = subprocess.run(cmd_ffmpeg, check=True, capture_output=True, text=True)
+            # Add timeout to prevent hanging during conversion
+            result = subprocess.run(cmd_ffmpeg, check=True, capture_output=True, text=True, timeout=30)
             return True
+        except subprocess.TimeoutExpired:
+            print("[audio] ffmpeg timeout efter 30s - avbryter konvertering")
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"[audio] ffmpeg misslyckades eller saknas: {e}")
         
@@ -143,8 +158,11 @@ class SimpleVoiceAgent:
         cmd_sox = ["sox", input_path, output_path]
         print(f"[audio] Försöker konvertera med sox...")
         try:
-            result = subprocess.run(cmd_sox, check=True, capture_output=True, text=True)
+            # Add timeout to prevent hanging during conversion
+            result = subprocess.run(cmd_sox, check=True, capture_output=True, text=True, timeout=30)
             return True
+        except subprocess.TimeoutExpired:
+            print("[audio] sox timeout efter 30s - avbryter konvertering")
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"[audio] sox misslyckades eller saknas: {e}")
         
@@ -156,9 +174,16 @@ class SimpleVoiceAgent:
         cmd = ["aplay", "-q", "-D", dev, wav_path]
         print("[audio] Spelar upp svar...")
         try:
-            subprocess.run(cmd, check=True)
+            # Add reasonable timeout for playback (60 seconds should be enough for most responses)
+            subprocess.run(cmd, check=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            print("[audio] aplay timeout efter 60s - avbryter uppspelning")
         except subprocess.CalledProcessError as e:
             print("[audio] aplay misslyckades:", e)
+        except FileNotFoundError:
+            print("[audio] aplay hittades inte - kontrollera att ALSA-verktyg är installerade")
+        except Exception as e:
+            print(f"[audio] Oväntat fel vid uppspelning: {e}")
 
     def handle_button(self):
         if not self._lock.acquire(blocking=False):
