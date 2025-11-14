@@ -112,27 +112,57 @@ class SimpleVoiceAgent:
         ]
 
         print(f"[audio] Spelar in (max {dur}s) på {dev} ...")
+        proc = None
         try:
-            # Add timeout to prevent hanging if arecord doesn't respond
-            # Set timeout slightly longer than recording duration to allow for completion
-            timeout = dur + 5
-            subprocess.run(cmd, check=True, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            print(f"[audio] arecord timeout efter {timeout}s - avbryter inspelning")
-            return None
-        except subprocess.CalledProcessError as e:
-            # arecord returns a non-zero exit code when the process is interrupted
-            # (e.g. when the agent is shutting down due to Ctrl+C). In that case we
-            # simply abort silently instead of reporting a failure to the user.
-            if not self.running:
+            # Use Popen to have better control over the process
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Wait for the recording to complete, with a timeout slightly longer than duration
+            # to allow arecord to finish cleanly
+            timeout = dur + 2
+            stdout, stderr = proc.communicate(timeout=timeout)
+            
+            # Check if the process completed successfully
+            if proc.returncode != 0 and self.running:
+                stderr_text = stderr.decode('utf-8', errors='ignore') if stderr else ''
+                print(f"[audio] arecord misslyckades med kod {proc.returncode}: {stderr_text}")
                 return None
-            print("[audio] arecord misslyckades:", e)
-            return None
+        except subprocess.TimeoutExpired:
+            # If arecord doesn't finish on its own, send SIGINT to gracefully terminate it
+            print(f"[audio] arecord överskred tidsgränsen efter {dur}s, avslutar...")
+            if proc:
+                try:
+                    proc.send_signal(signal.SIGINT)
+                    proc.wait(timeout=2)
+                except Exception:
+                    # If SIGINT doesn't work, forcefully terminate
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+            # Even though we had to terminate it, the recording might still be valid
+            # Continue to check if the file was created
         except FileNotFoundError:
             print("[audio] arecord hittades inte - kontrollera att ALSA-verktyg är installerade")
             return None
         except Exception as e:
+            # If the agent is shutting down, abort silently
+            if not self.running:
+                if proc:
+                    try:
+                        proc.terminate()
+                        proc.wait(timeout=1)
+                    except Exception:
+                        pass
+                return None
             print(f"[audio] Oväntat fel vid inspelning: {e}")
+            if proc:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=1)
+                except Exception:
+                    pass
             return None
 
         if not os.path.exists(out_path):
