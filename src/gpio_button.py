@@ -1,4 +1,5 @@
 import threading
+from typing import Optional
 
 try:
     import RPi.GPIO as GPIO
@@ -17,23 +18,34 @@ class Button:
 
     def start(self):
         if GPIO is None:
-            print("[gpio] RPi.GPIO saknas – simulerar knapp (tryck Enter i terminalen)")
-            threading.Thread(target=self._simulate, daemon=True).start()
+            self._start_simulation(
+                "[gpio] RPi.GPIO saknas – simulerar knapp (tryck Enter i terminalen)"
+            )
             return
 
-        GPIO.setmode(GPIO.BCM)
-        # Don't configure pull-up/down in software - the hardware already has it
-        # The KS0314 ReSpeaker 2-Mic HAT has a hardware pull-up on GPIO17
-        # so we detect FALLING edge when button is pressed (active low)
-        GPIO.setup(self.pin, GPIO.IN)
-        # Remove any existing event detection to avoid "Failed to add edge detection" error
         try:
-            GPIO.remove_event_detect(self.pin)
-        except Exception:
-            pass  # Ignore if no event detection was previously set
-        edge = GPIO.FALLING if self.pull_up else GPIO.RISING
-        GPIO.add_event_detect(self.pin, edge, callback=self._edge, bouncetime=150)
-        print(f"[gpio] Knapp på GPIO{self.pin} – tryck för att spela in.")
+            GPIO.setmode(GPIO.BCM)
+            # Don't configure pull-up/down in software - the hardware already has it
+            # The KS0314 ReSpeaker 2-Mic HAT has a hardware pull-up on GPIO17
+            # so we detect FALLING edge when button is pressed (active low)
+            GPIO.setup(self.pin, GPIO.IN)
+            # Remove any existing event detection to avoid "Failed to add edge detection" error
+            try:
+                GPIO.remove_event_detect(self.pin)
+            except Exception:
+                pass  # Ignore if no event detection was previously set
+            edge = GPIO.FALLING if self.pull_up else GPIO.RISING
+            GPIO.add_event_detect(self.pin, edge, callback=self._edge, bouncetime=150)
+            print(f"[gpio] Knapp på GPIO{self.pin} – tryck för att spela in.")
+        except Exception as e:
+            print(
+                f"[gpio] Kunde inte initiera GPIO{self.pin}: {e}. "
+                "Växlar till simulerat läge."
+            )
+            self.cleanup()
+            self._start_simulation(
+                "[gpio] Simulerar knapp (tryck Enter i terminalen)"
+            )
 
     def _edge(self, channel):
         if self._pressed_cb:
@@ -63,3 +75,8 @@ class Button:
             input("[gpio] Tryck Enter för att spela in...\n")
             if self._pressed_cb:
                 self._pressed_cb()
+
+    def _start_simulation(self, message: Optional[str] = None):
+        if message:
+            print(message)
+        threading.Thread(target=self._simulate, daemon=True).start()
